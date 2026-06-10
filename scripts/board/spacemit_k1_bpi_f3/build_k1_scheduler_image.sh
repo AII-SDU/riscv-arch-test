@@ -53,6 +53,12 @@ Environment:
   OBJCOPY           Override objcopy tool
   MKIMAGE           Override mkimage tool
 
+Bundled K1 components:
+  scripts/board/spacemit_k1_bpi_f3/tools/FSBL.bin
+  scripts/board/spacemit_k1_bpi_f3/tools/fw_dynamic.itb
+  scripts/board/spacemit_k1_bpi_f3/tools/k1-x_deb1.dtb
+  scripts/board/spacemit_k1_bpi_f3/tools/mkimage
+
 Host-only execution:
   This script must run directly on the host. It no longer auto-enters the
   rvtest container.
@@ -69,6 +75,7 @@ EOF
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 WORKSPACE_ROOT="$(cd -- "${REPO_ROOT}/.." && pwd)"
+TOOLS_DIR="${SCRIPT_DIR}/tools"
 RVTEST_TRASH_ROOT="${WORKSPACE_ROOT}/.trash"
 SDK_ROOT_DEFAULT="${WORKSPACE_ROOT}/buildroot-sdk-2.2"
 SCOPE_SET_ROOT="${SCRIPT_DIR}/scope_sets"
@@ -299,12 +306,14 @@ SDK_ROOT="${SDK_ROOT_DEFAULT}"
 
 DEFAULT_OPENSBI="$(
   find_first_existing \
+    "${TOOLS_DIR}/fw_dynamic.itb" \
     "${SDK_ROOT}/output/k1_v2/images/fw_dynamic.itb" \
     "${SDK_ROOT}/output/k1_v2/build/opensbi-custom/build/platform/generic/firmware/fw_dynamic.itb" \
     || true
 )"
 DEFAULT_FSBL="$(
   find_first_existing \
+    "${TOOLS_DIR}/FSBL.bin" \
     "${SDK_ROOT}/output/k1_v2/images/FSBL.bin" \
     "${SDK_ROOT}/output/k1_v2/build/uboot-custom/FSBL.bin" \
     || true
@@ -334,6 +343,7 @@ fi
 
 DEFAULT_SDK_DTB="$(
   find_first_existing \
+    "${TOOLS_DIR}/k1-x_deb1.dtb" \
     "${SDK_ROOT}/output/k1_v2/build/uboot-custom/arch/riscv/dts/k1-x_deb1.dtb" \
     "${SDK_ROOT}/output/k1_v2/build/uboot-custom/u-boot.dtb" \
     "${SDK_ROOT}/output/k1_v2/images/k1-x_deb1.dtb" \
@@ -382,6 +392,7 @@ fi
 
 DEFAULT_MKIMAGE="$(
   find_first_existing \
+    "${TOOLS_DIR}/mkimage" \
     "mkimage" \
     "${SDK_ROOT}/output/k1_v2/build/host-uboot-tools-2021.07/tools/mkimage" \
     "${SDK_ROOT}/output/k1_v2/build/uboot-custom/tools/mkimage" \
