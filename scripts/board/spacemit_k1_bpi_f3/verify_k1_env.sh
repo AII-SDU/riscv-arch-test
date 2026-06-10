@@ -15,14 +15,14 @@ Purpose:
 
 Defaults:
   --workspace-root  <repo-parent of this script checkout>
-  --sdk-root        <workspace-root>/buildroot-sdk-2.2
+  --sdk-root        <workspace-root>/buildroot-sdk-2.2 (legacy fallback)
   --package-dir     <unset>
 
 Checks:
   - host execution mode (must not run inside a container)
   - local workspace / repo layout
   - local toolchain and helper tools used by make elfs / scheduler packaging
-  - minimal K1 SDK artifacts
+  - bundled K1 components under scripts/board/spacemit_k1_bpi_f3/tools
   - local sudo write-card readiness
   - local serial and SD-card partition labels
   - optional scheduler package directory completeness
@@ -38,6 +38,7 @@ EOF
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 WORKSPACE_ROOT_DEFAULT="$(cd -- "${REPO_ROOT}/.." && pwd)"
+TOOLS_DIR="${SCRIPT_DIR}/tools"
 
 WORKSPACE_ROOT="${WORKSPACE_ROOT_DEFAULT}"
 SDK_ROOT=""
@@ -91,7 +92,7 @@ K1_LOWER_ENV_DEV="${K1_LOWER_ENV_DEV:-/dev/disk/by-partlabel/env}"
 K1_LOWER_BOOTFS_DEV="${K1_LOWER_BOOTFS_DEV:-/dev/disk/by-partlabel/bootfs}"
 
 FAILURES=0
-SHOULD_HINT_SDK=0
+SHOULD_HINT_TOOLS=0
 SHOULD_HINT_PACKAGE=0
 SHOULD_HINT_SUDO=0
 SHOULD_HINT_SERIAL=0
@@ -134,6 +135,46 @@ check_tool() {
   else
     fail "${tool}" "not found in PATH"
   fi
+}
+
+check_mkimage() {
+  local local_mkimage="${TOOLS_DIR}/mkimage"
+  local sdk_mkimage
+  local sdk_candidates=(
+    "${SDK_ROOT}/output/k1_v2/build/host-uboot-tools-2021.07/tools/mkimage"
+    "${SDK_ROOT}/output/k1_v2/build/uboot-custom/tools/mkimage"
+    "${SDK_ROOT}/output/k1_v2/build/opensbi-custom/tools/mkimage"
+  )
+
+  if [[ -e "${local_mkimage}" ]]; then
+    if [[ -x "${local_mkimage}" ]]; then
+      pass "mkimage" "${local_mkimage}"
+    else
+      fail "mkimage" "found but not executable: ${local_mkimage}"
+      SHOULD_HINT_TOOLS=1
+    fi
+    return
+  fi
+
+  if command -v mkimage >/dev/null 2>&1; then
+    pass "mkimage" "$(command -v mkimage)"
+    return
+  fi
+
+  for sdk_mkimage in "${sdk_candidates[@]}"; do
+    if [[ -e "${sdk_mkimage}" ]]; then
+      if [[ -x "${sdk_mkimage}" ]]; then
+        pass "mkimage" "${sdk_mkimage}"
+      else
+        fail "mkimage" "found but not executable: ${sdk_mkimage}"
+        SHOULD_HINT_TOOLS=1
+      fi
+      return
+    fi
+  done
+
+  fail "mkimage" "missing: ${local_mkimage}"
+  SHOULD_HINT_TOOLS=1
 }
 
 check_gcc_version() {
@@ -212,16 +253,20 @@ host_sudo() {
   fi
 }
 
-check_sdk_artifact() {
-  local rel_path="$1"
-  local sdk_path="${SDK_ROOT}/${rel_path}"
+check_k1_component() {
+  local label="$1"
+  shift
+  local candidate
 
-  if [[ -f "${sdk_path}" ]]; then
-    pass "${rel_path}" "${sdk_path}"
-  else
-    fail "${rel_path}" "missing: ${sdk_path}"
-    SHOULD_HINT_SDK=1
-  fi
+  for candidate in "$@"; do
+    if [[ -f "${candidate}" ]]; then
+      pass "${label}" "${candidate}"
+      return
+    fi
+  done
+
+  fail "${label}" "missing: ${TOOLS_DIR}/${label}"
+  SHOULD_HINT_TOOLS=1
 }
 
 check_package_artifact() {
@@ -277,27 +322,37 @@ check_tool python3
 check_gcc_version
 check_tool riscv64-unknown-elf-objdump
 check_sail_version
-check_tool mkimage
+check_mkimage
 
 section "Host Tools"
 for tool in dd cmp stty mount umount tar sha256sum blockdev findmnt readlink sudo; do
   check_tool "${tool}"
 done
 
-section "K1 SDK"
-if [[ -d "${SDK_ROOT}" ]]; then
-  pass "sdk root" "${SDK_ROOT}"
+section "K1 Components"
+if [[ -d "${TOOLS_DIR}" ]]; then
+  pass "tools dir" "${TOOLS_DIR}"
 else
-  fail "sdk root" "missing: ${SDK_ROOT}"
+  fail "tools dir" "missing: ${TOOLS_DIR}"
+  SHOULD_HINT_TOOLS=1
 fi
 
-for rel_path in \
-  "output/k1_v2/images/FSBL.bin" \
-  "output/k1_v2/images/fw_dynamic.itb" \
-  "output/k1_v2/images/k1-x_deb1.dtb"
-do
-  check_sdk_artifact "${rel_path}"
-done
+check_k1_component \
+  "FSBL.bin" \
+  "${TOOLS_DIR}/FSBL.bin" \
+  "${SDK_ROOT}/output/k1_v2/images/FSBL.bin" \
+  "${SDK_ROOT}/output/k1_v2/build/uboot-custom/FSBL.bin"
+check_k1_component \
+  "fw_dynamic.itb" \
+  "${TOOLS_DIR}/fw_dynamic.itb" \
+  "${SDK_ROOT}/output/k1_v2/images/fw_dynamic.itb" \
+  "${SDK_ROOT}/output/k1_v2/build/opensbi-custom/build/platform/generic/firmware/fw_dynamic.itb"
+check_k1_component \
+  "k1-x_deb1.dtb" \
+  "${TOOLS_DIR}/k1-x_deb1.dtb" \
+  "${SDK_ROOT}/output/k1_v2/build/uboot-custom/arch/riscv/dts/k1-x_deb1.dtb" \
+  "${SDK_ROOT}/output/k1_v2/build/uboot-custom/u-boot.dtb" \
+  "${SDK_ROOT}/output/k1_v2/images/k1-x_deb1.dtb"
 
 section "Write-Card Access"
 if detect_sudo_mode; then
@@ -381,8 +436,8 @@ if [[ "${FAILURES}" -eq 0 ]]; then
   echo "PASS  host-native K1 environment looks ready"
 else
   echo "FAIL  host-native K1 environment has ${FAILURES} failing check(s)"
-  if [[ "${SHOULD_HINT_SDK}" -eq 1 ]]; then
-    echo "hint: ensure FSBL.bin, fw_dynamic.itb, and k1-x_deb1.dtb exist under ${SDK_ROOT}"
+  if [[ "${SHOULD_HINT_TOOLS}" -eq 1 ]]; then
+    echo "hint: ensure FSBL.bin, fw_dynamic.itb, k1-x_deb1.dtb, and mkimage exist under ${TOOLS_DIR}"
   fi
   if [[ "${SHOULD_HINT_SUDO}" -eq 1 ]]; then
     echo "hint: enable sudo for this host user or export K1_LOWER_PASS before re-running verify_k1_env.sh"
