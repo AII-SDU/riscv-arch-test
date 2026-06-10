@@ -1,0 +1,37 @@
+# K1 official-supported capability superset v1
+#
+# This preset only includes scopes that satisfy both:
+# 1. The K1 datasheet explicitly documents the underlying extension/capability.
+# 2. The current riscv-arch-test-act4 tree already contains a matching test scope.
+#
+# At the moment this file is intentionally identical to k1-qemu-rv64-max-v1,
+# because the extra documented K1 features that are not in that preset still do
+# not have standalone ACT scopes in this tree.
+#
+# Examples that remain config-only for now:
+# V, Zvfh, Zvfhmin, Zvkt, Zkt, Sscofpmf, Sstc, Svinval, Svnapot, Svpbmt
+
+rv64i/I
+rv64i/M
+rv64i/F
+rv64i/D
+rv64i/Zaamo
+rv64i/Zalrsc
+rv64i/Zca
+rv64i/Zcd
+rv64i/Zfh
+rv64i/Zfhmin
+rv64i/Zicbom
+rv64i/Zicbop
+rv64i/Zicboz
+rv64i/Zicntr
+rv64i/Zicond
+rv64i/Zicsr
+rv64i/Zifencei
+rv64i/Zihintpause
+rv64i/Zihpm
+rv64i/Zba
+rv64i/Zbb
+rv64i/Zbc
+rv64i/Zbs
+rv64i/Zbkc

@@ -59,7 +59,7 @@
 
 /************************************* RVTEST_CODE_END *************************************/
 /**** RVTEST_CODE_END is run after the actual test code.                                ****/
-/**** - Switch to M Mode                                                                ****/
+/**** - Switch to M Mode when using the standard M-mode trap framework                  ****/
 /**** - Instantiate epilogs using RVTEST_TRAP_EPILOG() if rvtests_xtrap_routine defined ****/
 /**** - Instantiate trap handlers for each priv mode                                    ****/
 /**** - Include headers that contain code (not macros) that would throw off the address ****/
@@ -78,13 +78,13 @@
   // invoked unless there is STANDARD_SM_SUPPORTED.  A user with custom M-mode will need
   // to reimplement many parts of this macro.
   rvtest_code_end:
-    #ifdef STANDARD_SM_SUPPORTED
+    #if defined(STANDARD_SM_SUPPORTED) && !defined(RVMODEL_ENTRY_SMODE)
       RVTEST_GOTO_MMODE
     #endif
 
   // Restore xTVEC, trampoline, regs for each mode in opposite order that they were saved
   cleanup_epilogs:
-    #ifdef STANDARD_SM_SUPPORTED
+    #if defined(STANDARD_SM_SUPPORTED) && !defined(RVMODEL_ENTRY_SMODE)
       #ifdef S_SUPPORTED
         #ifdef H_SUPPORTED
           RVTEST_TRAP_EPILOG V        // actual v-mode prolog/epilog/handler code
@@ -95,7 +95,7 @@
       RVTEST_TRAP_EPILOG M            // actual m-mode prolog/epilog/handler code
     #endif
 
-  #ifdef STANDARD_SM_SUPPORTED
+  #if defined(STANDARD_SM_SUPPORTED) && !defined(RVMODEL_ENTRY_SMODE)
     LI(     T4, 0xBAD0DEAD)           // T5 holds 0xBAD0DEAD if abort_test was executed
     bne     T4, T5, check_trap_sig_offset
     jal     T2, failedtest_trap_x7_x9
@@ -127,7 +127,7 @@
   // Guard matches the RVTEST_TRAP_EPILOG guard above: rvtest_Mend (and sibling
   // labels) are defined by RVTEST_TRAP_EPILOG, so the handler that references
   // them must only be emitted when the epilog is also emitted.
-  #ifdef STANDARD_SM_SUPPORTED
+  #if defined(STANDARD_SM_SUPPORTED) && !defined(RVMODEL_ENTRY_SMODE)
   INSTANTIATE_MODE_MACRO RVTEST_TRAP_HANDLER
   #endif
 
@@ -149,19 +149,23 @@
     #ifdef RVMODEL_IO_INIT
       RVMODEL_IO_INIT(T1, T2, T3)
     #endif
-    // always boot to at least M-mode
-    RVTEST_BOOT_TO_MMODE
-    #ifndef BOOT_TO_MMODE
-      // the BOOT_TO_MMODE symbol will be defined in any tests that should run in M-mode.
-      // otherwise continue to a lower privilege mode (if one exists) depending on the type of test
-      #ifdef S_SUPPORTED
-        RVTEST_BOOT_TO_SMODE
-      #endif
-      #ifndef BOOT_TO_SMODE
-        // the BOOT_TO_SMODE symbol will be defined in any tests that should run in S-mode.
-        // otherwise continue to U-mode if U-mode supported
-        #ifdef U_SUPPORTED
-          RVTEST_BOOT_TO_UMODE
+    #ifdef RVMODEL_ENTRY_SMODE
+      RVTEST_BOOT_FROM_SMODE
+    #else
+      // always boot to at least M-mode
+      RVTEST_BOOT_TO_MMODE
+      #ifndef BOOT_TO_MMODE
+        // the BOOT_TO_MMODE symbol will be defined in any tests that should run in M-mode.
+        // otherwise continue to a lower privilege mode (if one exists) depending on the type of test
+        #ifdef S_SUPPORTED
+          RVTEST_BOOT_TO_SMODE
+        #endif
+        #ifndef BOOT_TO_SMODE
+          // the BOOT_TO_SMODE symbol will be defined in any tests that should run in S-mode.
+          // otherwise continue to U-mode if U-mode supported
+          #ifdef U_SUPPORTED
+            RVTEST_BOOT_TO_UMODE
+          #endif
         #endif
       #endif
     #endif
@@ -306,7 +310,7 @@
   // Guard matches RVTEST_TRAP_HANDLER guard: RVTEST_TRAP_SAVEAREA references
   // Mtrampoline (and sibling labels) which are only defined when RVTEST_TRAP_HANDLER
   // is instantiated.
-  #ifdef STANDARD_SM_SUPPORTED
+  #if defined(STANDARD_SM_SUPPORTED) && !defined(RVMODEL_ENTRY_SMODE)
   INSTANTIATE_MODE_MACRO RVTEST_TRAP_SAVEAREA
   #endif
 
@@ -754,6 +758,28 @@
   #endif
 .endm
 
+/************************************ RVTEST_BOOT_FROM_S_MODE ******************************/
+/**** Initialize tests that are entered directly in S-mode.                             ****/
+/*******************************************************************************************/
+.macro RVTEST_BOOT_FROM_SMODE
+  #ifndef S_SUPPORTED
+    #error "RVMODEL_ENTRY_SMODE requires S_SUPPORTED"
+  #endif
+
+  rvtest_boot_from_smode:
+    #ifdef U_SUPPORTED
+      li t0, -1
+      csrw scounteren, t0
+    #endif
+
+    #if defined(ZICBOM_SUPPORTED) || defined(ZICBOP_SUPPORTED) || defined(ZICBOZ_SUPPORTED)
+      li t0, SENVCFG_CBIE | SENVCFG_CBCFE | SENVCFG_CBZE
+      csrw senvcfg, t0
+    #endif
+
+    INIT_FLOAT_VECTOR_STATE
+.endm
+
 /************************************ RVTEST_BOOT_TO_U_MODE ********************************/
 /**** Switch into U-mode                                                                ****/
 /*******************************************************************************************/
@@ -788,12 +814,20 @@
     // for floating-point and vector
     #if defined(F_SUPPORTED) || defined(ZFINX_SUPPORTED)
       li t0, MSTATUS_FS
-      csrs mstatus, t0 // Set FS to dirty to enable floating-point
+      #ifdef RVMODEL_ENTRY_SMODE
+        csrs sstatus, t0 // Set FS to dirty to enable floating-point
+      #else
+        csrs mstatus, t0 // Set FS to dirty to enable floating-point
+      #endif
       csrw fcsr, zero // Initialize fcsr
     #endif
     #ifdef ZVL32B_SUPPORTED  // this should be defined if there is any vector support whatsoever
       li t0, MSTATUS_VS
-      csrs mstatus, t0 // Set VS to dirty to enable vector
+      #ifdef RVMODEL_ENTRY_SMODE
+        csrs sstatus, t0 // Set VS to dirty to enable vector
+      #else
+        csrs mstatus, t0 // Set VS to dirty to enable vector
+      #endif
       csrr t0, vlenb   // Read VLENB so coverage trace records VLEN/8 (used by vlmax computation)
     #endif
 .endm

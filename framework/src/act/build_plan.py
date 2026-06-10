@@ -45,6 +45,7 @@ def _compiler_cmd(config: Config, xlen: int, tests_dir: Path, udb_header_dir: Pa
         cmd.extend([f"--target=riscv{xlen}", "-fuse-ld=lld"])
     cmd.extend(
         [
+            f"-I{udb_header_dir.absolute()}",
             f"-I{config.dut_include_dir.absolute()}",
             f"-T{config.linker_script.absolute()}",
             "-O0",
@@ -52,7 +53,6 @@ def _compiler_cmd(config: Config, xlen: int, tests_dir: Path, udb_header_dir: Pa
             "-mcmodel=medany",
             "-nostdlib",
             f"-I{tests_dir}/env",
-            f"-I{udb_header_dir.absolute()}",
         ]
     )
     if config.compiler_type == CompilerType.GCC:
