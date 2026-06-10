@@ -1,0 +1,41 @@
+# K1 scheduler S-mode packable extension set v1
+#
+# This list keeps only the extensions that satisfy both:
+# 1. They are explicitly part of the current K1 supported-extension statement.
+# 2. The current K1 scheduler ELF tree already has packable ACT scopes for them.
+#
+# The custom build wrapper resolves official names such as:
+# - RV64I -> rv64i/I
+# - A     -> rv64i/Zaamo + rv64i/Zalrsc
+# - C     -> rv64i/Zca + rv64i/Zcd
+#
+# Not included here yet:
+# - Config-only / not-yet-packable scopes in this tree:
+#   V, Sscofpmf, Sstc, Svinval, Svnapot, Svpbmt, Zkt, Zvfh, Zvfhmin, Zvkt
+# - Current privileged / non-packable scheduler board-test scopes:
+#   U, S, Sm, ZicntrS, ZicntrU and related priv/* entries
+
+I
+M
+Zaamo
+Zalrsc
+F
+D
+Zca
+Zcd
+Zicbom
+Zicbop
+Zicboz
+Zicntr
+Zicond
+Zicsr
+Zifencei
+Zihintpause
+Zihpm
+Zfh
+Zfhmin
+Zba
+Zbb
+Zbc
+Zbs
+Zbkc

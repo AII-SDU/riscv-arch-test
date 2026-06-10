@@ -1,0 +1,401 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  bash scripts/board/spacemit_k1_bpi_f3/verify_k1_env.sh \
+    [--workspace-root <path>] \
+    [--sdk-root <path>] \
+    [--package-dir <path>]
+
+Purpose:
+  Verify whether the current host-native K1 environment is ready for the
+  scheduler board-test flow without relying on the rvtest container model.
+
+Defaults:
+  --workspace-root  <repo-parent of this script checkout>
+  --sdk-root        <workspace-root>/buildroot-sdk-2.2
+  --package-dir     <unset>
+
+Checks:
+  - host execution mode (must not run inside a container)
+  - local workspace / repo layout
+  - local toolchain and helper tools used by make elfs / scheduler packaging
+  - minimal K1 SDK artifacts
+  - local sudo write-card readiness
+  - local serial and SD-card partition labels
+  - optional scheduler package directory completeness
+
+Notes:
+  - This script is static verification only.
+  - It does not build, flash, or parse logs.
+  - It does not check Docker, container images, or /workspace mounts.
+  - K1_LOWER_PASS may be exported to satisfy password-based sudo checks.
+EOF
+}
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
+WORKSPACE_ROOT_DEFAULT="$(cd -- "${REPO_ROOT}/.." && pwd)"
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT_DEFAULT}"
+SDK_ROOT=""
+PACKAGE_DIR=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --workspace-root)
+      WORKSPACE_ROOT="${2:-}"
+      shift 2
+      ;;
+    --sdk-root)
+      SDK_ROOT="${2:-}"
+      shift 2
+      ;;
+    --package-dir)
+      PACKAGE_DIR="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT%/}"
+[[ -n "${WORKSPACE_ROOT}" ]] || WORKSPACE_ROOT="/"
+if [[ -z "${SDK_ROOT}" ]]; then
+  SDK_ROOT="${WORKSPACE_ROOT}/buildroot-sdk-2.2"
+fi
+SDK_ROOT="${SDK_ROOT%/}"
+[[ -n "${SDK_ROOT}" ]] || SDK_ROOT="/"
+if [[ -n "${PACKAGE_DIR}" ]]; then
+  PACKAGE_DIR="${PACKAGE_DIR%/}"
+  [[ -n "${PACKAGE_DIR}" ]] || PACKAGE_DIR="/"
+fi
+
+LOWER_REPO_ROOT="${WORKSPACE_ROOT}/riscv-arch-test-act4"
+SERIAL_ROOT="/dev/serial/by-id"
+PARTLABEL_ROOT="/dev/disk/by-partlabel"
+K1_LOWER_FSBL_DEV="${K1_LOWER_FSBL_DEV:-/dev/disk/by-partlabel/fsbl}"
+K1_LOWER_OPENSBI_DEV="${K1_LOWER_OPENSBI_DEV:-/dev/disk/by-partlabel/opensbi}"
+K1_LOWER_UBOOT_DEV="${K1_LOWER_UBOOT_DEV:-/dev/disk/by-partlabel/uboot}"
+K1_LOWER_ENV_DEV="${K1_LOWER_ENV_DEV:-/dev/disk/by-partlabel/env}"
+K1_LOWER_BOOTFS_DEV="${K1_LOWER_BOOTFS_DEV:-/dev/disk/by-partlabel/bootfs}"
+
+FAILURES=0
+SHOULD_HINT_SDK=0
+SHOULD_HINT_PACKAGE=0
+SHOULD_HINT_SUDO=0
+SHOULD_HINT_SERIAL=0
+SHOULD_HINT_PARTLABEL=0
+
+section() {
+  printf '\n[%s]\n' "$1"
+}
+
+pass() {
+  local label="$1"
+  local detail="${2:-}"
+  if [[ -n "${detail}" ]]; then
+    printf 'PASS  %s: %s\n' "${label}" "${detail}"
+  else
+    printf 'PASS  %s\n' "${label}"
+  fi
+}
+
+fail() {
+  local label="$1"
+  local detail="${2:-}"
+  FAILURES=$((FAILURES + 1))
+  if [[ -n "${detail}" ]]; then
+    printf 'FAIL  %s: %s\n' "${label}" "${detail}"
+  else
+    printf 'FAIL  %s\n' "${label}"
+  fi
+}
+
+running_in_container() {
+  [[ -f /.dockerenv ]] && return 0
+  grep -qaE '/(docker|containers)/' /proc/1/cgroup 2>/dev/null
+}
+
+check_tool() {
+  local tool="$1"
+  if command -v "${tool}" >/dev/null 2>&1; then
+    pass "${tool}" "$(command -v "${tool}")"
+  else
+    fail "${tool}" "not found in PATH"
+  fi
+}
+
+check_gcc_version() {
+  local tool="riscv64-unknown-elf-gcc"
+  local version
+  local major
+
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    fail "${tool}" "not found in PATH"
+    return
+  fi
+
+  version="$("${tool}" -dumpversion 2>/dev/null || true)"
+  major="${version%%.*}"
+  if [[ -z "${version}" || ! "${major}" =~ ^[0-9]+$ ]]; then
+    fail "${tool}" "unable to parse -dumpversion output: ${version:-<empty>}"
+    return
+  fi
+
+  if (( major < 15 )); then
+    fail "${tool}" "version ${version} found, need GCC 15 or later"
+  else
+    pass "${tool}" "$(command -v "${tool}") (version ${version})"
+  fi
+}
+
+check_sail_version() {
+  local tool="sail_riscv_sim"
+  local version
+
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    fail "${tool}" "not found in PATH"
+    return
+  fi
+
+  version="$("${tool}" --version 2>/dev/null || true)"
+  if [[ "${version}" != "0.11" ]]; then
+    fail "${tool}" "version ${version:-<empty>} found, need 0.11"
+  else
+    pass "${tool}" "$(command -v "${tool}") (version ${version})"
+  fi
+}
+
+LOCAL_SUDO_MODE=""
+detect_sudo_mode() {
+  if ! command -v sudo >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if sudo -n true >/dev/null 2>&1; then
+    LOCAL_SUDO_MODE="nopass"
+    return 0
+  fi
+
+  if [[ -n "${K1_LOWER_PASS:-}" ]]; then
+    LOCAL_SUDO_MODE="password"
+    return 0
+  fi
+
+  if [[ -t 0 && -t 1 ]]; then
+    if sudo -v >/dev/null 2>&1; then
+      LOCAL_SUDO_MODE="tty"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+host_sudo() {
+  local cmd="$1"
+  if [[ "${LOCAL_SUDO_MODE}" == "password" ]]; then
+    printf '%s\n' "${K1_LOWER_PASS}" | sudo -S -p '' bash -lc "${cmd}"
+  else
+    sudo bash -lc "${cmd}"
+  fi
+}
+
+check_sdk_artifact() {
+  local rel_path="$1"
+  local sdk_path="${SDK_ROOT}/${rel_path}"
+
+  if [[ -f "${sdk_path}" ]]; then
+    pass "${rel_path}" "${sdk_path}"
+  else
+    fail "${rel_path}" "missing: ${sdk_path}"
+    SHOULD_HINT_SDK=1
+  fi
+}
+
+check_package_artifact() {
+  local rel_path="$1"
+  local abs_path="${PACKAGE_DIR}/${rel_path}"
+
+  if [[ -s "${abs_path}" ]]; then
+    pass "${rel_path}" "${abs_path}"
+  else
+    fail "${rel_path}" "missing or empty: ${abs_path}"
+    SHOULD_HINT_PACKAGE=1
+  fi
+}
+
+section "Execution Mode"
+if running_in_container; then
+  fail "host execution" "verify_k1_env.sh must run on the host, not inside a container"
+  printf '\n[Summary]\n'
+  echo "FAIL  host-native K1 environment has ${FAILURES} failing check(s)"
+  exit "${FAILURES}"
+else
+  pass "host execution" "running on the host"
+fi
+
+section "Workspace"
+if [[ -d "${WORKSPACE_ROOT}" ]]; then
+  pass "workspace root" "${WORKSPACE_ROOT}"
+else
+  fail "workspace root" "missing: ${WORKSPACE_ROOT}"
+fi
+
+if [[ -d "${LOWER_REPO_ROOT}" ]]; then
+  pass "repo root" "${LOWER_REPO_ROOT}"
+else
+  fail "repo root" "missing: ${LOWER_REPO_ROOT}"
+fi
+
+for rel_path in \
+  "config/cores/spacemit-k1-bpi-f3-scheduler/test_config.yaml" \
+  "scripts/board/spacemit_k1_bpi_f3/build_k1_scheduler_image.sh" \
+  "scripts/board/spacemit_k1_bpi_f3/flash_k1_test_card.sh"
+do
+  repo_path="${LOWER_REPO_ROOT}/${rel_path}"
+  if [[ -f "${repo_path}" ]]; then
+    pass "${rel_path}" "${repo_path}"
+  else
+    fail "${rel_path}" "missing: ${repo_path}"
+  fi
+done
+
+section "Toolchain"
+check_tool python3
+check_gcc_version
+check_tool riscv64-unknown-elf-objdump
+check_sail_version
+check_tool mkimage
+
+section "Host Tools"
+for tool in dd cmp stty mount umount tar sha256sum blockdev findmnt readlink sudo; do
+  check_tool "${tool}"
+done
+
+section "K1 SDK"
+if [[ -d "${SDK_ROOT}" ]]; then
+  pass "sdk root" "${SDK_ROOT}"
+else
+  fail "sdk root" "missing: ${SDK_ROOT}"
+fi
+
+for rel_path in \
+  "output/k1_v2/images/FSBL.bin" \
+  "output/k1_v2/images/fw_dynamic.itb" \
+  "output/k1_v2/images/k1-x_deb1.dtb"
+do
+  check_sdk_artifact "${rel_path}"
+done
+
+section "Write-Card Access"
+if detect_sudo_mode; then
+  pass "sudo mode" "${LOCAL_SUDO_MODE}"
+else
+  fail "sudo mode" "need passwordless sudo, interactive sudo, or K1_LOWER_PASS"
+  SHOULD_HINT_SUDO=1
+fi
+
+section "Physical Links"
+shopt -s nullglob
+serial_candidates=("${SERIAL_ROOT}"/*)
+shopt -u nullglob
+if [[ "${#serial_candidates[@]}" -gt 0 ]]; then
+  pass "serial by-id" "${serial_candidates[0]}"
+else
+  fail "serial by-id" "no serial device found under ${SERIAL_ROOT}"
+  SHOULD_HINT_SERIAL=1
+fi
+
+for spec in \
+  "fsbl:${K1_LOWER_FSBL_DEV}" \
+  "opensbi:${K1_LOWER_OPENSBI_DEV}" \
+  "uboot:${K1_LOWER_UBOOT_DEV}" \
+  "env:${K1_LOWER_ENV_DEV}" \
+  "bootfs:${K1_LOWER_BOOTFS_DEV}"
+do
+  label="${spec%%:*}"
+  device="${spec#*:}"
+  if [[ -e "${device}" ]]; then
+    if [[ -n "${LOCAL_SUDO_MODE}" ]]; then
+      real_device="$(host_sudo "readlink -f '${device}'")"
+      size_bytes="$(host_sudo "blockdev --getsize64 '${real_device}'")"
+      pass "partition label ${label}" "${device} -> ${real_device} (${size_bytes} bytes)"
+    else
+      pass "partition label ${label}" "${device}"
+    fi
+  else
+    fail "partition label ${label}" "missing: ${device}"
+    SHOULD_HINT_PARTLABEL=1
+  fi
+done
+
+section "Scheduler Package"
+if [[ -n "${PACKAGE_DIR}" ]]; then
+  if [[ -d "${PACKAGE_DIR}" ]]; then
+    pass "package dir" "${PACKAGE_DIR}"
+  else
+    fail "package dir" "missing: ${PACKAGE_DIR}"
+    SHOULD_HINT_PACKAGE=1
+  fi
+
+  if [[ -d "${PACKAGE_DIR}" ]]; then
+    for rel_path in \
+      "selected-scopes.txt" \
+      "manifest.tsv" \
+      "scheduler.elf" \
+      "scheduler.bin" \
+      "u-boot.itb" \
+      "flash-command.sh" \
+      "README.txt"
+    do
+      check_package_artifact "${rel_path}"
+    done
+
+    if [[ -e "${PACKAGE_DIR}/flash-command.sh" ]]; then
+      if [[ -x "${PACKAGE_DIR}/flash-command.sh" ]]; then
+        pass "flash-command.sh executable" "${PACKAGE_DIR}/flash-command.sh"
+      else
+        fail "flash-command.sh executable" "not executable: ${PACKAGE_DIR}/flash-command.sh"
+        SHOULD_HINT_PACKAGE=1
+      fi
+    fi
+  fi
+else
+  pass "package dir" "not requested"
+fi
+
+printf '\n[Summary]\n'
+if [[ "${FAILURES}" -eq 0 ]]; then
+  echo "PASS  host-native K1 environment looks ready"
+else
+  echo "FAIL  host-native K1 environment has ${FAILURES} failing check(s)"
+  if [[ "${SHOULD_HINT_SDK}" -eq 1 ]]; then
+    echo "hint: ensure FSBL.bin, fw_dynamic.itb, and k1-x_deb1.dtb exist under ${SDK_ROOT}"
+  fi
+  if [[ "${SHOULD_HINT_SUDO}" -eq 1 ]]; then
+    echo "hint: enable sudo for this host user or export K1_LOWER_PASS before re-running verify_k1_env.sh"
+  fi
+  if [[ "${SHOULD_HINT_SERIAL}" -eq 1 ]]; then
+    echo "hint: attach the serial adapter so a device appears under ${SERIAL_ROOT}"
+  fi
+  if [[ "${SHOULD_HINT_PARTLABEL}" -eq 1 ]]; then
+    echo "hint: attach the SD card and confirm the fsbl/opensbi/uboot/env/bootfs partition labels exist"
+  fi
+  if [[ "${SHOULD_HINT_PACKAGE}" -eq 1 ]]; then
+    echo "hint: rebuild or re-copy the scheduler suite output so ${PACKAGE_DIR} contains the expected artifacts"
+  fi
+fi
+
+exit "${FAILURES}"

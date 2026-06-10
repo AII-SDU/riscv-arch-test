@@ -1,0 +1,33 @@
+# K1 default board-test scope set (historical preset name retained)
+#
+# This preset now tracks the user-confirmed K1 supported extension list plus the
+# ACT scopes that already exist in this tree.
+#
+# It intentionally excludes documented-but-not-yet-directly-mapped ACT scopes,
+# including V/Zvfh/Zvfhmin/Zvkt/Zkt/Sscofpmf/Sstc/Svinval, and also excludes the
+# current NORUN-only Svnapot/Svpbmt tests that do not produce packable ELF files.
+
+rv64i/I
+rv64i/M
+rv64i/F
+rv64i/D
+rv64i/Zaamo
+rv64i/Zalrsc
+rv64i/Zca
+rv64i/Zcd
+rv64i/Zfh
+rv64i/Zfhmin
+rv64i/Zicbom
+rv64i/Zicbop
+rv64i/Zicboz
+rv64i/Zicntr
+rv64i/Zicond
+rv64i/Zicsr
+rv64i/Zifencei
+rv64i/Zihintpause
+rv64i/Zihpm
+rv64i/Zba
+rv64i/Zbb
+rv64i/Zbc
+rv64i/Zbs
+rv64i/Zbkc

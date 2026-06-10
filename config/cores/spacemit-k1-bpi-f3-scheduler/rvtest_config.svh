@@ -1,0 +1,63 @@
+// rvtest_config.svh
+// SPDX-License-Identifier: Apache-2.0
+
+`define XLEN64
+`define FLEN64
+`define VLEN256
+`define ELEN64
+
+// K1 exposes 32 PMP entries. The legacy coverage selector only distinguishes
+// PMP_16 and PMP_64, so the authoritative numeric PMP settings stay in
+// rvtest_config.h.
+
+`define RAM_BASE_ADDR       32'h60000000
+`define LARGEST_PROGRAM     32'h00040000
+
+`define ACCESS_FAULT_ADDRESS 64'h0000000080010000
+`define CLINT_BASE 64'h00000000e4000000
+
+`define V_SUPPORTED
+`define D_SUPPORTED
+`define F_SUPPORTED
+`define S_SUPPORTED
+`define SSCOFPMF_SUPPORTED
+`define SSTC_SUPPORTED
+`define SVINVAL_SUPPORTED
+`define SVNAPOT_SUPPORTED
+`define SVPBMT_SUPPORTED
+`define ZFH_SUPPORTED
+`define ZFHMIN_SUPPORTED
+`define ZBA_SUPPORTED
+`define ZBB_SUPPORTED
+`define ZBC_SUPPORTED
+`define ZBKC_SUPPORTED
+`define ZBS_SUPPORTED
+`define ZAAMO_SUPPORTED
+`define ZALRSC_SUPPORTED
+`define ZICBOM_SUPPORTED
+`define ZICBOP_SUPPORTED
+`define ZICBOZ_SUPPORTED
+`define ZICNTR_SUPPORTED
+`define ZICOND_SUPPORTED
+`define ZICSR_SUPPORTED
+`define ZIFENCEI_SUPPORTED
+`define ZIHINTPAUSE_SUPPORTED
+`define ZIHPM_SUPPORTED
+`define ZCA_SUPPORTED
+`define ZCD_SUPPORTED
+`define ZVFH_SUPPORTED
+`define ZVFHMIN_SUPPORTED
+`define SV39_SUPPORTED
+
+`define COUNTINHIBIT_EN_0
+`define COUNTINHIBIT_EN_2
+`define TIME_CSR_IMPLEMENTED
+
+`define SEW8_SUPPORTED
+`define SEW16_SUPPORTED
+`define SEW32_SUPPORTED
+`define SEW64_SUPPORTED
+
+`define LMULf8_SUPPORTED
+`define LMULf4_SUPPORTED
+`define LMULf2_SUPPORTED
