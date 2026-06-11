@@ -82,7 +82,7 @@ if [[ -n "${PACKAGE_DIR}" ]]; then
   [[ -n "${PACKAGE_DIR}" ]] || PACKAGE_DIR="/"
 fi
 
-LOWER_REPO_ROOT="${WORKSPACE_ROOT}/riscv-arch-test-act4"
+LOWER_REPO_ROOT="${WORKSPACE_ROOT}/riscv-arch-test"
 SERIAL_ROOT="/dev/serial/by-id"
 PARTLABEL_ROOT="/dev/disk/by-partlabel"
 K1_LOWER_FSBL_DEV="${K1_LOWER_FSBL_DEV:-/dev/disk/by-partlabel/fsbl}"
