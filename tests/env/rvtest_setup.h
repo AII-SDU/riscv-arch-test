@@ -127,8 +127,13 @@
   // Guard matches the RVTEST_TRAP_EPILOG guard above: rvtest_Mend (and sibling
   // labels) are defined by RVTEST_TRAP_EPILOG, so the handler that references
   // them must only be emitted when the epilog is also emitted.
-  #if defined(STANDARD_SM_SUPPORTED) && !defined(RVMODEL_ENTRY_SMODE)
-  INSTANTIATE_MODE_MACRO RVTEST_TRAP_HANDLER
+  #ifdef STANDARD_SM_SUPPORTED
+    INSTANTIATE_MODE_MACRO RVTEST_TRAP_HANDLER
+    // Fast illegal-instruction handler for high-trap-volume suites (Ssstrict).
+    // The prolog installs it in mtvec/stvec instead of the standard trampolines.
+    #ifdef RVTEST_USE_FAST_TRAP_HANDLER
+      RVTEST_FAST_TRAP_HANDLER
+    #endif
   #endif
 
   // Include test failure handling code
@@ -579,7 +584,10 @@
       csrw mhpmevent29, zero
       csrw mhpmevent30, zero
       csrw mhpmevent31, zero
+      // mhpmevent*h high-half CSRs only exist on RV32 with Sscofpmf; otherwise
+      // accessing them is reserved.
       #if __riscv_xlen == 32
+        #ifdef SSCOFPMF_SUPPORTED
         csrw mhpmevent3h, zero
         csrw mhpmevent4h, zero
         csrw mhpmevent5h, zero
@@ -609,6 +617,7 @@
         csrw mhpmevent29h, zero
         csrw mhpmevent30h, zero
         csrw mhpmevent31h, zero
+        #endif
       #endif
 
       // make counters accessible to a lower privilege mode if one exists
