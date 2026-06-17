@@ -13,6 +13,29 @@
       "len": 32,
       "value": "0xFFFF_FFFF"
     },
+    "mcounteren_writable_bits": {
+      "len": 32,
+      "value": "0xFFFF_FFFF"
+    },
+    "mtvec": {
+      "direct": {
+        "supported": true,
+        "base_alignment": 2
+      },
+      "vectored": {
+        "supported": true,
+        "base_alignment": 2
+      }
+    },
+    "stvec": {
+      "direct": {
+        "supported": true
+      },
+      "vectored": {
+        "supported": true,
+        "base_alignment": 2
+      }
+    },
     "xtval_nonzero": {
       "illegal_instruction": true,
       "software_breakpoint": true,
@@ -36,6 +59,10 @@
       "xenvcfg_cbie": "Xenvcfg_ClearPermissions",
       "xtvec_mode": "Xtvec_Ignore",
       "rv32zdinx_odd_register": "Zdinx_Illegal"
+    },
+    "mstatus": {
+      "fs_legal_states": "ExtContext_FourState",
+      "vs_legal_states": "ExtContext_FourState"
     }
   },
   "memory": {
@@ -185,18 +212,22 @@
     "cache_block_size_exp": 6,
     "reservation": {
       "reservation_set_size_exp": 3,
-      "require_exact_reservation_addr": false
+      "require_exact_reservation_addr": false,
+      "invalidate_on_same_hart_store": false
     },
     "clint": {
+      "supported": true,
       "base": 3825205248,
       "size": 65536
     },
     "simple_interrupt_generator": {
+      "supported": true,
       "base": 3825238016
     },
     "clock_frequency": 24000000,
     "instructions_per_tick": 1,
     "wfi_is_nop": true,
+    "wfi_available_to_user_mode": false,
     "max_time_to_wait": 200
   },
   "extensions": {
@@ -216,7 +247,18 @@
       "support_level": "Full",
       "vlen_exp": 8,
       "elen_exp": 6,
-      "vl_use_ceil": false
+      "reserved_behavior": {
+        "illegal_vtype": "IllegalVtype_SetVill",
+        "vstart_out_of_bounds": "Vstart_Illegal"
+      },
+      "vl_use_ceil": false,
+      "max_index_eew_exp": 6,
+      "vstart": {
+        "zero_required": {
+          "arith": true,
+          "scalar_move": true
+        }
+      }
     },
     "B": {
       "supported": false
@@ -483,6 +525,21 @@
     },
     "Svnapot": {
       "supported": true
+    },
+    "Ssnpm": {
+      "supported": false,
+      "supported_pmlen_7": true,
+      "supported_pmlen_16": true
+    },
+    "Smnpm": {
+      "supported": false,
+      "supported_pmlen_7": true,
+      "supported_pmlen_16": true
+    },
+    "Smmpm": {
+      "supported": false,
+      "supported_pmlen_7": true,
+      "supported_pmlen_16": true
     },
     "Svpbmt": {
       "supported": true
