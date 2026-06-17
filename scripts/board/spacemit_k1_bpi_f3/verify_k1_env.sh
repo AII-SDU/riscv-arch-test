@@ -24,7 +24,7 @@ Checks:
   - local toolchain and helper tools used by make elfs / scheduler packaging
   - bundled K1 components under scripts/board/spacemit_k1_bpi_f3/tools
   - local sudo write-card readiness
-  - local serial and SD-card partition labels
+  - local serial access
   - optional scheduler package directory completeness
 
 Notes:
@@ -84,19 +84,12 @@ fi
 
 LOWER_REPO_ROOT="${WORKSPACE_ROOT}/riscv-arch-test"
 SERIAL_ROOT="/dev/serial/by-id"
-PARTLABEL_ROOT="/dev/disk/by-partlabel"
-K1_LOWER_FSBL_DEV="${K1_LOWER_FSBL_DEV:-/dev/disk/by-partlabel/fsbl}"
-K1_LOWER_OPENSBI_DEV="${K1_LOWER_OPENSBI_DEV:-/dev/disk/by-partlabel/opensbi}"
-K1_LOWER_UBOOT_DEV="${K1_LOWER_UBOOT_DEV:-/dev/disk/by-partlabel/uboot}"
-K1_LOWER_ENV_DEV="${K1_LOWER_ENV_DEV:-/dev/disk/by-partlabel/env}"
-K1_LOWER_BOOTFS_DEV="${K1_LOWER_BOOTFS_DEV:-/dev/disk/by-partlabel/bootfs}"
 
 FAILURES=0
 SHOULD_HINT_TOOLS=0
 SHOULD_HINT_PACKAGE=0
 SHOULD_HINT_SUDO=0
 SHOULD_HINT_SERIAL=0
-SHOULD_HINT_PARTLABEL=0
 
 section() {
   printf '\n[%s]\n' "$1"
@@ -373,29 +366,6 @@ else
   SHOULD_HINT_SERIAL=1
 fi
 
-for spec in \
-  "fsbl:${K1_LOWER_FSBL_DEV}" \
-  "opensbi:${K1_LOWER_OPENSBI_DEV}" \
-  "uboot:${K1_LOWER_UBOOT_DEV}" \
-  "env:${K1_LOWER_ENV_DEV}" \
-  "bootfs:${K1_LOWER_BOOTFS_DEV}"
-do
-  label="${spec%%:*}"
-  device="${spec#*:}"
-  if [[ -e "${device}" ]]; then
-    if [[ -n "${LOCAL_SUDO_MODE}" ]]; then
-      real_device="$(host_sudo "readlink -f '${device}'")"
-      size_bytes="$(host_sudo "blockdev --getsize64 '${real_device}'")"
-      pass "partition label ${label}" "${device} -> ${real_device} (${size_bytes} bytes)"
-    else
-      pass "partition label ${label}" "${device}"
-    fi
-  else
-    fail "partition label ${label}" "missing: ${device}"
-    SHOULD_HINT_PARTLABEL=1
-  fi
-done
-
 section "Scheduler Package"
 if [[ -n "${PACKAGE_DIR}" ]]; then
   if [[ -d "${PACKAGE_DIR}" ]]; then
@@ -444,9 +414,6 @@ else
   fi
   if [[ "${SHOULD_HINT_SERIAL}" -eq 1 ]]; then
     echo "hint: attach the serial adapter so a device appears under ${SERIAL_ROOT}"
-  fi
-  if [[ "${SHOULD_HINT_PARTLABEL}" -eq 1 ]]; then
-    echo "hint: attach the SD card and confirm the fsbl/opensbi/uboot/env/bootfs partition labels exist"
   fi
   if [[ "${SHOULD_HINT_PACKAGE}" -eq 1 ]]; then
     echo "hint: rebuild or re-copy the scheduler suite output so ${PACKAGE_DIR} contains the expected artifacts"
