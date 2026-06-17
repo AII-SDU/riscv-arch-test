@@ -1,6 +1,6 @@
 name: spacemit-k1-bpi-f3-scheduler
-compiler_exe: /home/aii-01/TOOLCHAINtest/gnu-riscv/gcc-riscv64-unknown-elf/bin/riscv64-unknown-elf-gcc
-objdump_exe: /home/aii-01/TOOLCHAINtest/gnu-riscv/gcc-riscv64-unknown-elf/bin/riscv64-unknown-elf-objdump
+compiler_exe: riscv64-unknown-elf-gcc
+objdump_exe: riscv64-unknown-elf-objdump
 ref_model_exe: sail_riscv_sim
 udb_config: spacemit-k1-bpi-f3-scheduler.yaml
 linker_script: link.ld
