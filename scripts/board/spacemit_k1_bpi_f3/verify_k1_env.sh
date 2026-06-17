@@ -204,7 +204,7 @@ check_sail_version() {
   fi
 
   version="$("${tool}" --version 2>/dev/null || true)"
-  if [[ "${version}" != "0.11" ]]; then
+  if [[ "${version}" != "0.12" ]]; then
     fail "${tool}" "version ${version:-<empty>} found, need 0.11"
   else
     pass "${tool}" "$(command -v "${tool}") (version ${version})"
