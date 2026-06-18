@@ -649,9 +649,9 @@ EOF
   "${MKIMAGE}" -f "${FIT_ITS}" "${SCHEDULER_ITB}"
 )
 
-FLASH_FSBL_PATH="$(path_expr_for_flash_command "${FSBL_PATH}")"
-FLASH_OPENSBI_PATH="$(path_expr_for_flash_command "${OPENSBI_PATH}")"
-FLASH_UBOOT_ITB_PATH="$(path_expr_for_flash_command "${SCHEDULER_ITB}")"
+# FLASH_FSBL_PATH="$(path_expr_for_flash_command "${FSBL_PATH}")"
+# FLASH_OPENSBI_PATH="$(path_expr_for_flash_command "${OPENSBI_PATH}")"
+# FLASH_UBOOT_ITB_PATH="$(path_expr_for_flash_command "${SCHEDULER_ITB}")"
 
 cat >"${FLASH_COMMAND}" <<EOF
 #!/usr/bin/env bash
@@ -663,9 +663,9 @@ WORKSPACE_ROOT="\$(cd -- "\${REPO_ROOT}/.." && pwd)"
 
 cd "\${REPO_ROOT}/fst-tools/riscv-arch-test"
 bash scripts/board/spacemit_k1_bpi_f3/flash_k1_test_card.sh \\
-  --fsbl "${FLASH_FSBL_PATH}" \\
-  --opensbi "${FLASH_OPENSBI_PATH}" \\
-  --uboot-itb "${FLASH_UBOOT_ITB_PATH}"
+  --fsbl "./scripts/board/spacemit_k1_bpi_f3/tools/FSBL.bin" \\
+  --opensbi "./scripts/board/spacemit_k1_bpi_f3/tools/fw_dynamic.itb" \\
+  --uboot-itb "./work/spacemit-k1-bpi-f3-scheduler/k1-smode-packable-v1-scheduler-20260618-180659/u-boot.itb"
 EOF
 chmod +x "${FLASH_COMMAND}"
 
