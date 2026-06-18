@@ -658,10 +658,10 @@ cat >"${FLASH_COMMAND}" <<EOF
 set -euo pipefail
 
 SCRIPT_DIR="\$(cd -- "\$(dirname -- "\${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="\$(cd -- "\${SCRIPT_DIR}/../../.." && pwd)"
+REPO_ROOT="\$(cd -- "\${SCRIPT_DIR}/../.." && pwd)"
 WORKSPACE_ROOT="\$(cd -- "\${REPO_ROOT}/.." && pwd)"
 
-cd "\${REPO_ROOT}"
+cd "\${REPO_ROOT}/fst-tools/riscv-arch-test"
 bash scripts/board/spacemit_k1_bpi_f3/flash_k1_test_card.sh \\
   --fsbl "${FLASH_FSBL_PATH}" \\
   --opensbi "${FLASH_OPENSBI_PATH}" \\

@@ -44,6 +44,10 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT_DEFAULT}"
 SDK_ROOT=""
 PACKAGE_DIR=""
 
+cd $WORKSPACE_ROOT
+cd riscv-arch-test
+mise trust .mise.toml
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workspace-root)
