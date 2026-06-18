@@ -665,7 +665,7 @@ cd "\${REPO_ROOT}/fst-tools/riscv-arch-test"
 bash scripts/board/spacemit_k1_bpi_f3/flash_k1_test_card.sh \\
   --fsbl "./scripts/board/spacemit_k1_bpi_f3/tools/FSBL.bin" \\
   --opensbi "./scripts/board/spacemit_k1_bpi_f3/tools/fw_dynamic.itb" \\
-  --uboot-itb "./work/spacemit-k1-bpi-f3-scheduler/k1-smode-packable-v1-scheduler-20260618-180659/u-boot.itb"
+  --uboot-itb "./u-boot.itb"
 EOF
 chmod +x "${FLASH_COMMAND}"
 
