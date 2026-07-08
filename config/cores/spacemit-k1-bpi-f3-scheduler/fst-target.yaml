@@ -1,0 +1,17 @@
+schema_version: 1
+
+key: spacemitK1
+label: spacemitK1
+default: true
+
+config_file: test_config.yaml
+work_dir: work/spacemit-k1-bpi-f3-scheduler
+suite_prefix: k1-smode-packable-v1-scheduler
+
+base_extension_set: k1-smode-packable-v1
+
+board_script_dir: scripts/board/spacemit_k1_bpi_f3
+scripts:
+  verify_env: verify_k1_env.sh
+  build_package: build_k1_scheduler_image_custom.sh
+  parse_log: parse_k1_scheduler_log.py
